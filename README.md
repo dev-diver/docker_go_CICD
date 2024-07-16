@@ -1,1 +1,1 @@
-riddle fox
+testing for docker automation
