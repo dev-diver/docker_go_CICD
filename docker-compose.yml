@@ -1,5 +1,6 @@
 services:
-  backend:
+  server:
+    container_name: backend
     build: ./backend
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
@@ -7,5 +8,6 @@ services:
       - "5001:5001"
     restart: always
 
-  frontend:
+  client:
+    container_name: frontend
     build: ./frontend

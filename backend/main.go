@@ -5,6 +5,8 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"syscall"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
@@ -41,7 +43,14 @@ func main() {
 		if err := removeClientWithSocket(); err != nil {
 			return err
 		}
-		return c.SendString("Client container restarted successfully")
+		return c.SendString("Client container removed successfully")
+	})
+
+	app.Post("/restart", func(c *fiber.Ctx) error {
+		if err := restartServerWithSocket(); err != nil {
+			return err
+		}
+		return c.SendString("Server container restarted successfully")
 	})
 	// 5001 포트에서 애플리케이션 실행
 	app.Listen(":5001")
@@ -62,19 +71,65 @@ func execCommand(command string, args ...string) error {
 	return nil
 }
 
-func getShell() string {
-	shell := os.Getenv("SHELL")
-	if shell == "" {
-		shell = "/bin/sh"
+func execCommand2(command string, args ...string) error {
+	cmd := exec.Command(command, args...)
+
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Env = os.Environ()
+
+	// Create a new session (Unix/Linux)
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		Setsid: true,
 	}
-	return shell
+
+	log.Printf("Running command: %v %v", command, strings.Join(args, " "))
+
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+
+	// Create a channel to signal completion
+	done := make(chan error)
+
+	go func() {
+		done <- cmd.Wait()
+	}()
+
+	select {
+	case err := <-done:
+		if err != nil {
+			log.Printf("Command finished with error: %v", err)
+			return err
+		}
+		log.Printf("Command finished successfully")
+	case <-time.After(30 * time.Second): // Adjust the timeout as needed
+		if err := cmd.Process.Kill(); err != nil {
+			log.Printf("Failed to kill process: %v", err)
+			return err
+		}
+		log.Printf("Command timed out and was killed")
+	}
+
+	return nil
 }
 
 func removeClientWithSocket() error {
-	containerName := "frontend"
+	serviceName := "client"
 
-	if err := execCommand("docker", "compose", "rm", "-f", containerName); err != nil {
+	if err := execCommand("docker", "compose", "rm", "-f", serviceName); err != nil {
 		log.Printf("Failed to remove client container: %v", err)
+		return fiber.NewError(fiber.StatusInternalServerError, "Internal server error")
+	}
+
+	return nil
+}
+
+func restartServerWithSocket() error {
+	serviceName := "server"
+
+	if err := execCommand2("docker", "compose", "up", "-d", serviceName); err != nil {
+		log.Printf("Failed to restart server container: %v", err)
 		return fiber.NewError(fiber.StatusInternalServerError, "Internal server error")
 	}
 

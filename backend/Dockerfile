@@ -30,6 +30,7 @@ COPY *.go ./
 RUN go build -o /app/server
 
 COPY docker-compose.yml /app/docker-compose.yml
+COPY Dockerfile /app/Dockerfile
 
 # 컨테이너 실행
 CMD ["/app/server"]

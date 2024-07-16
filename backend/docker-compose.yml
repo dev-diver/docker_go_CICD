@@ -1,11 +1,13 @@
 services:
-  backend:
-    build: ./backend
+  server:
+    container_name: backend
+    build: .
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     ports:
       - "5001:5001"
     restart: always
 
-  frontend:
-    build: ./frontend
+  client:
+    container_name: frontend
+    build: ../frontend
